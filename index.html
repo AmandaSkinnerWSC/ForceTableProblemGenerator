@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vector Addition Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    canvas { border: 1px solid black; margin: 20px; background: white; }
+    button { margin: 10px; padding: 10px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Force Table Problem Generator</h1>
+  <canvas id="vectorCanvas" width="600" height="600"></canvas>
+  <br>
+  <button onclick="generateProblem()">Generate New Problem</button>
+  <button onclick="revealSolution()">Reveal Solution</button>
+
+  <p id="problem"></p>
+  <p id="solution" style="display:none;"></p>
+
+<script>
+  const canvas = document.getElementById("vectorCanvas");
+  const ctx = canvas.getContext("2d");
+  const center = {x: canvas.width/2, y: canvas.height/2};
+
+  // Weight kit (all available pieces)
+  const weightKit = [10,10,20,20,20,20,50,50,100,100,200,200,200,200,500,500,1000,1000];
+
+  let A, B, R, E, scale;
+  let tableImage = null;
+
+  // --- Load background image (force table) ---
+  tableImage = new Image();
+  tableImage.src = "compass.png"; // replace with uploaded filename
+  tableImage.onload = () => generateProblem();
+
+  function randomWeight() {
+    return weightKit[Math.floor(Math.random() * weightKit.length)];
+  }
+
+  function randomAngle() {
+    return Math.floor(Math.random() * 360);
+  }
+
+  function toComponents(mag, angleDeg) {
+    const rad = angleDeg * Math.PI / 180;
+    return {x: mag * Math.cos(rad), y: mag * Math.sin(rad)};
+  }
+
+  function magnitude(x, y) {
+    return Math.sqrt(x*x + y*y);
+  }
+
+  function angle(x, y) {
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  function drawVector(vec, color, label) {
+    const dx = vec.mag * Math.cos(vec.angle * Math.PI/180) * scale;
+    const dy = vec.mag * Math.sin(vec.angle * Math.PI/180) * scale;
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(center.x + dx, center.y - dy);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fillText(label, center.x + dx*1.05, center.y - dy*1.05);
+  }
+
+  // --- Check if vector magnitudes can be built from one kit ---
+  function canBuildAll(mags) {
+    mags = mags.map(m => Math.round(m));
+    let remaining = [...weightKit];
+    for (let m of mags) {
+      let used = subsetSumAllocate(remaining, m);
+      if (!used) return false;
+      for (let w of used) {
+        let idx = remaining.indexOf(w);
+        if (idx !== -1) remaining.splice(idx, 1);
+      }
+    }
+    return true;
+  }
+
+  // subset-sum allocate: return weights that make target, or null
+  function subsetSumAllocate(available, target) {
+    target = Math.round(target);
+    const dp = Array.from({length: available.length+1}, () => ({}));
+    dp[0][0] = [];
+    for (let i = 0; i < available.length; i++) {
+      for (let sum in dp[i]) {
+        sum = parseInt(sum);
+        // skip item
+        if (!(sum in dp[i+1])) dp[i+1][sum] = [...dp[i][sum]];
+        // take item
+        let newSum = sum + available[i];
+        if (!(newSum in dp[i+1])) dp[i+1][newSum] = [...dp[i][sum], available[i]];
+      }
+    }
+    return dp[available.length][target] || null;
+  }
+
+  function generateProblem() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let valid = false;
+    while (!valid) {
+      A = {mag: randomWeight(), angle: randomAngle()};
+      B = {mag: randomWeight(), angle: randomAngle()};
+      const compA = toComponents(A.mag, A.angle);
+      const compB = toComponents(B.mag, B.angle);
+
+      const Rx = compA.x + compB.x;
+      const Ry = compA.y + compB.y;
+      R = {mag: magnitude(Rx,Ry), angle: angle(Rx,Ry)};
+      E = {mag: R.mag, angle: (R.angle + 180) % 360};
+
+      // Require that A, B, and R magnitudes are all buildable at once
+      if (canBuildAll([A.mag, B.mag, R.mag])) valid = true;
+    }
+
+    // scaling so largest vector fits
+    const maxMag = Math.max(A.mag, B.mag, R.mag);
+    scale = (canvas.width/2 - 50) / maxMag;
+
+    // draw background image if loaded
+    if (tableImage && tableImage.complete) {
+      ctx.drawImage(tableImage, 0, 0, canvas.width, canvas.height);
+    }
+
+    // draw A & B only
+    drawVector(A, "blue", "A");
+    drawVector(B, "green", "B");
+
+    document.getElementById("problem").innerText =
+      `A = ${A.mag} g @ ${A.angle}°,   B = ${B.mag} g @ ${B.angle}°`;
+    document.getElementById("solution").style.display = "none";
+  }
+
+function revealSolution() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // redraw background image if loaded
+  if (tableImage && tableImage.complete) {
+    ctx.drawImage(tableImage, 0, 0, canvas.width, canvas.height);
+  }
+
+  // redraw A and B
+  drawVector(A, "blue", "A");
+  drawVector(B, "green", "B");
+
+  // add R and E
+  drawVector(R, "orange", "R");
+  drawVector(E, "red", "E");
+
+  document.getElementById("solution").style.display = "block";
+  document.getElementById("solution").innerText =
+    `R = ${Math.round(R.mag)} g @ ${R.angle.toFixed(1)}°   |   E = ${Math.round(E.mag)} g @ ${E.angle.toFixed(1)}°`;
+}
+</script>
+</body>
+</html>
